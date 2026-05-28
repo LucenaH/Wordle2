@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>5-Letter Word Guessing Game (Enhanced Dictionary)</title>
+    <style>
+        :root {
+            --correct-color: #6aaa64;
+            --present-color: #c9b458;
+            --absent-color: #787c7e;
+            --bg-color: #121213;
+            --text-color: #ffffff;
+            --border-color: #3a3a3c;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        h1 {
+            margin-bottom: 5px;
+            font-size: 2.5rem;
+            letter-spacing: 2px;
+        }
+
+        .subtitle {
+            color: #818384;
+            margin-bottom: 20px;
+        }
+
+        #game-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            max-width: 500px;
+            width: 100%;
+        }
+
+        #board {
+            display: grid;
+            grid-template-rows: repeat(5, 1fr);
+            grid-gap: 5px;
+            margin-bottom: 20px;
+        }
+
+        .row {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            grid-gap: 5px;
+        }
+
+        .tile {
+            width: 60px;
+            height: 60px;
+            border: 2px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+            font-weight: bold;
+            text-transform: uppercase;
+            user-select: none;
+            transition: background-color 0.3s, border-color 0.3s;
+        }
+
+        .tile.pop {
+            transform: scale(1.05);
+            border-color: #565758;
+        }
+
+        .tile.correct {
+            background-color: var(--correct-color);
+            border-color: var(--correct-color);
+        }
+        .tile.present {
+            background-color: var(--present-color);
+            border-color: var(--present-color);
+        }
+        .tile.absent {
+            background-color: var(--absent-color);
+            border-color: var(--absent-color);
+        }
+
+        .controls {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            width: 100%;
+            align-items: center;
+        }
+
+        input {
+            background: transparent;
+            border: 2px solid var(--border-color);
+            color: var(--text-color);
+            font-size: 1.5rem;
+            padding: 10px;
+            text-align: center;
+            text-transform: uppercase;
+            width: 200px;
+            letter-spacing: 4px;
+            border-radius: 5px;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: #565758;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 10px;
+        }
+
+        button {
+            background-color: #818384;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            font-size: 1rem;
+            font-weight: bold;
+            cursor: pointer;
+            border-radius: 5px;
+            transition: background-color 0.2s;
+        }
+
+        button:hover {
+            background-color: #565758;
+        }
+
+        #hint-btn {
+            background-color: #2a6496;
+        }
+        #hint-btn:hover {
+            background-color: #1d4568;
+        }
+        #hint-btn:disabled {
+            background-color: #273542;
+            color: #555;
+            cursor: not-allowed;
+        }
+
+        #message {
+            margin-top: 15px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            min-height: 1.5em;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>WORD CRAFT</h1>
+    <div class="subtitle">5 Tries to guess the hidden word</div>
+
+    <div id="game-container">
+        <div id="board"></div>
+
+        <div class="controls">
+            <input type="text" id="guess-input" maxlength="5" placeholder="GUESS" autocomplete="off">
+            <div class="btn-group">
+                <button id="submit-btn">Submit</button>
+                <button id="hint-btn">Get Hint (<span id="hint-count">2</span> left)</button>
+                <button id="restart-btn" style="display:none;">Play Again</button>
+            </div>
+        </div>
+
+        <div id="message"></div>
+    </div>
+
+    <script>
+        // Solid local fallback word list including common nouns, tenses, and your requested 'sound'
+        let VALID_WORDS = [
+            "react", "coded", "codes", "plays", "played", "maker", "makes", "built", "build", "words",
+            "guess", "tries", "tried", "green", "light", "smart", "think", "thinks", "found", "finds",
+            "takes", "taken", "wrote", "write", "gives", "given", "saved", "saves", "helps", "helped",
+            "learn", "study", "score", "world", "games", "plant", "water", "flame", "stone", "brick",
+            "break", "broke", "drive", "drove", "speak", "spoke", "taken", "bring", "brings", "drawn",
+            "draws", "mixed", "mixes", "fixed", "fixes", "runs", "ran", "jumps", "jumped", "walks",
+            "sound", "sounds", "house", "train", "crane", "audio", "smart", "clock", "phase", "sharp"
+        ];
+
+        let secretWord = VALID_WORDS[Math.floor(Math.random() * VALID_WORDS.length)];
+        
+        const MAX_ATTEMPTS = 5;
+        let currentAttempt = 0;
+        let gameOver = false;
+        let hintsUsed = 0;
+        const MAX_HINTS = 2;
+
+        const board = document.getElementById('board');
+        const guessInput = document.getElementById('guess-input');
+        const submitBtn = document.getElementById('submit-btn');
+        const hintBtn = document.getElementById('hint-btn');
+        const restartBtn = document.getElementById('restart-btn');
+        const messageDisplay = document.getElementById('message');
+        const hintCountDisplay = document.getElementById('hint-count');
+
+        // Fetch the comprehensive online dictionary right away
+        async function loadMassiveDictionary() {
+            try {
+                const response = await fetch('https://raw.githubusercontent.com/tabatkins/wordle-list/master/words-allowed.txt');
+                if (!response.ok) throw new Error("Network response error");
+                const text = await response.text();
+                
+                // Parse words into array
+                const parsedWords = text.split('\n')
+                                        .map(word => word.trim().toLowerCase())
+                                        .filter(word => word.length === 5);
+                
+                if (parsedWords.length > 100) {
+                    VALID_WORDS = parsedWords;
+                    console.log("Massive online dictionary successfully loaded!");
+                    restartGame();
+                }
+            } catch (error) {
+                console.warn("Could not fetch online dictionary, running smoothly on fallback word list.", error);
+            }
+        }
+
+        function initializeBoard() {
+            board.innerHTML = '';
+            for (let i = 0; i < MAX_ATTEMPTS; i++) {
+                const row = document.createElement('div');
+                row.className = 'row';
+                for (let j = 0; j < 5; j++) {
+                    const tile = document.createElement('div');
+                    tile.className = 'tile';
+                    tile.id = `tile-${i}-${j}`;
+                    row.appendChild(tile);
+                }
+                board.appendChild(row);
+            }
+        }
+
+        guessInput.addEventListener('input', () => {
+            if (gameOver) return;
+            const value = guessInput.value.toLowerCase();
+            for (let j = 0; j < 5; j++) {
+                const tile = document.getElementById(`tile-${currentAttempt}-${j}`);
+                if (value[j]) {
+                    tile.textContent = value[j];
+                    tile.classList.add('pop');
+                } else {
+                    tile.textContent = '';
+                    tile.classList.remove('pop');
+                }
+            }
+        });
+
+        function processGuess() {
+            if (gameOver) return;
+
+            const guess = guessInput.value.toLowerCase();
+
+            if (guess.length !== 5) {
+                showMessage("Word must be exactly 5 letters long!");
+                return;
+            }
+
+            if (!VALID_WORDS.includes(guess)) {
+                showMessage("Not in our dictionary! (Try common words or alternate tenses)");
+                return;
+            }
+
+            showMessage(""); 
+            colorTiles(guess);
+
+            if (guess === secretWord) {
+                showMessage("🎉 Spectacular! You won!");
+                endGame();
+                return;
+            }
+
+            currentAttempt++;
+            guessInput.value = '';
+
+            if (currentAttempt >= MAX_ATTEMPTS) {
+                showMessage(`Game Over! The word was: ${secretWord.toUpperCase()}`);
+                endGame();
+            } else {
+                guessInput.focus();
+            }
+        }
+
+        function colorTiles(guess) {
+            const rowIdx = currentAttempt;
+            const secretLetterCounts = {};
+            
+            for (let char of secretWord) {
+                secretLetterCounts[char] = (secretLetterCounts[char] || 0) + 1;
+            }
+
+            const statuses = Array(5).fill('absent');
+
+            for (let i = 0; i < 5; i++) {
+                if (guess[i] === secretWord[i]) {
+                    statuses[i] = 'correct';
+                    secretLetterCounts[guess[i]]--;
+                }
+            }
+
+            for (let i = 0; i < 5; i++) {
+                if (statuses[i] !== 'correct' && secretWord.includes(guess[i])) {
+                    if (secretLetterCounts[guess[i]] > 0) {
+                        statuses[i] = 'present';
+                        secretLetterCounts[guess[i]]--;
+                    }
+                }
+            }
+
+            for (let i = 0; i < 5; i++) {
+                const tile = document.getElementById(`tile-${rowIdx}-${i}`);
+                tile.classList.add(statuses[i]);
+            }
+        }
+
+        function giveHint() {
+            if (gameOver || hintsUsed >= MAX_HINTS) return;
+
+            let dynamicTargetIdx = [];
+            for(let i=0; i<5; i++){
+                 dynamicTargetIdx.push(i);
+            }
+
+            const randomSpot = dynamicTargetIdx[Math.floor(Math.random() * dynamicTargetIdx.length)];
+            const letterRevealed = secretWord[randomSpot].toUpperCase();
+
+            hintsUsed++;
+            hintCountDisplay.textContent = MAX_HINTS - hintsUsed;
+
+            showMessage(`Hint: The letter at position ${randomSpot + 1} is "${letterRevealed}"`);
+
+            if (hintsUsed >= MAX_HINTS) {
+                hintBtn.disabled = true;
+            }
+        }
+
+        function showMessage(msg) {
+            messageDisplay.textContent = msg;
+        }
+
+        function endGame() {
+            gameOver = true;
+            guessInput.disabled = true;
+            submitBtn.disabled = true;
+            hintBtn.disabled = true;
+            restartBtn.style.display = "inline-block";
+        }
+
+        function restartGame() {
+            secretWord = VALID_WORDS[Math.floor(Math.random() * VALID_WORDS.length)];
+            currentAttempt = 0;
+            gameOver = false;
+            hintsUsed = 0;
+            
+            hintCountDisplay.textContent = MAX_HINTS;
+            hintBtn.disabled = false;
+            guessInput.disabled = false;
+            submitBtn.disabled = false;
+            restartBtn.style.display = "none";
+            guessInput.value = '';
+            showMessage("");
+            
+            initializeBoard();
+            guessInput.focus();
+        }
+
+        submitBtn.addEventListener('click', processGuess);
+        hintBtn.addEventListener('click', giveHint);
+        restartBtn.addEventListener('click', restartGame);
+        
+        guessInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                processGuess();
+            }
+        });
+
+        initializeBoard();
+        loadMassiveDictionary();
+        guessInput.focus();
+    </script>
+</body>
+</html>
